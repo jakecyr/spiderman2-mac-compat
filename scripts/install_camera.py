@@ -53,7 +53,8 @@ def main():
     for archive, expected in [(a.modsettings, 'modsettings.dll'), (a.camera, 'sm2_first_person_camera.dll')]:
         raw, files = script_package(archive)
         info = json.loads(raw)
-        if info.get('game') != 'MSM2' or info.get('type') != 'script':
+        allowed_type = 'lib' if expected == 'modsettings.dll' else 'script'
+        if info.get('game') != 'MSM2' or info.get('type') != allowed_type:
             raise SystemExit(f'Not a Spider-Man 2 script package: {archive.name}')
         matching = [data for name, data in files.items() if name == expected]
         if len(matching) != 1 or not matching[0].startswith(b'MZ'):
