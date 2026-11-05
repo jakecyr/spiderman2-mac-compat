@@ -1,0 +1,10 @@
+local.json
+state/
+__pycache__/
+*.pyc
+*.exe
+*.dll
+*.dylib
+*.dmp
+*.log
+.DS_Store

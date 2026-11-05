@@ -1,0 +1,166 @@
+diff --git a/meson.build b/meson.build
+index b89747b..b48088f 100644
+--- a/meson.build
++++ b/meson.build
+@@ -78,6 +78,7 @@ dmn_sources = files(
+   'src/dmn_com_hooks.cpp',
+   'src/dmn_dxil_reflect.cpp',
+   'src/dmn_import_shims.mm',
++  'src/wine_probe_bridge.cpp',
+ )
+ 
+ exports_list = meson.current_source_dir() / 'src/exports.symbols'
+diff --git a/src/dmn_com_hooks.cpp b/src/dmn_com_hooks.cpp
+index 0729bcd..6cbf71a 100644
+--- a/src/dmn_com_hooks.cpp
++++ b/src/dmn_com_hooks.cpp
+@@ -998,7 +998,8 @@ void probe_view_qi_ref_target(IUnknown* primary, IUnknown* view) {
+ void patch_shared_resource_exports(IUnknown* res) {
+     DMN_PATCH_QI(res, res_QueryInterface);
+     IDXGIResource1* r1 = nullptr;
+-    if (SUCCEEDED(res->QueryInterface(__uuidof(IDXGIResource1),
++    auto qi_orig = DMN_ORIG(res_QueryInterface, res);
++    if (qi_orig && SUCCEEDED(qi_orig(res, __uuidof(IDXGIResource1),
+                                       reinterpret_cast<void**>(&r1))) && r1) {
+         DMN_PATCH_QI(r1, res_QueryInterface);
+         DMN_PATCH(r1, IDXGIResource, GetSharedHandle, GetSharedHandle);
+@@ -2082,19 +2083,54 @@ HRESULT STDMETHODCALLTYPE hook_res_CreateSharedHandle(
+     return orig ? orig(This, attr, access, name, out) : E_FAIL;
+ }
+ 
++// Local Wine compatibility: older D3DMetal exposes only IDXGIResource.
++class WineResource1 final : public IDXGIResource1 {
++    std::atomic<ULONG> refs{1};
++    IDXGIResource* base;
++public:
++    explicit WineResource1(IDXGIResource* b):base(b) {}
++    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** out) override {
++        if (!out) return E_POINTER;
++        if (dmn_iid_eq(id,__uuidof(IDXGIResource1))) { *out=this; AddRef(); return S_OK; }
++        return base->QueryInterface(id,out);
++    }
++    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs; }
++    ULONG STDMETHODCALLTYPE Release() override { ULONG n=--refs; if(!n){base->Release();delete this;}return n; }
++    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID g,UINT n,const void*p) override {return base->SetPrivateData(g,n,p);}
++    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID g,const IUnknown*p) override {return base->SetPrivateDataInterface(g,p);}
++    HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID g,UINT*n,void*p) override {return base->GetPrivateData(g,n,p);}
++    HRESULT STDMETHODCALLTYPE GetParent(REFIID g,void**p) override {return base->GetParent(g,p);}
++    HRESULT STDMETHODCALLTYPE GetDevice(REFIID g,void**p) override {return base->GetDevice(g,p);}
++    HRESULT STDMETHODCALLTYPE GetSharedHandle(HANDLE*p) override {return hook_GetSharedHandle(base,p);}
++    HRESULT STDMETHODCALLTYPE GetUsage(DXGI_USAGE*p) override {return base->GetUsage(p);}
++    HRESULT STDMETHODCALLTYPE SetEvictionPriority(UINT p) override {return base->SetEvictionPriority(p);}
++    HRESULT STDMETHODCALLTYPE GetEvictionPriority(UINT*p) override {return base->GetEvictionPriority(p);}
++    HRESULT STDMETHODCALLTYPE CreateSubresourceSurface(UINT,IDXGISurface2**p) override {if(p)*p=nullptr;return E_NOTIMPL;}
++    HRESULT STDMETHODCALLTYPE CreateSharedHandle(const SECURITY_ATTRIBUTES*,DWORD,const WCHAR*,HANDLE*out) override {
++        if(SUCCEEDED(return_texture_pod(base,out,true)) || SUCCEEDED(return_buffer_pod(base,out,true)))return S_OK;
++        if(out)*out=nullptr;return E_FAIL;
++    }
++};
++
+ HRESULT STDMETHODCALLTYPE hook_res_QueryInterface(
+         IUnknown* This, REFIID riid, void** ppv) {
+     /* Vend the keyed mutex for textures created/imported with the flag. The
+      * identity lookup below QIs IUnknown, which re-enters this thunk with a
+      * different IID and falls straight through to orig. */
+     if (ppv && dmn_iid_eq(riid, __uuidof(IDXGIKeyedMutex))) {
++        if(getenv("SM2_NO_KEYED_MUTEX")){*ppv=nullptr;return E_NOINTERFACE;}
+         if (IDXGIKeyedMutex* km = dmn_kmtx_lookup(dmn_com_identity(This))) {
+             *ppv = km; /* AddRef'd by lookup */
+             return S_OK;
+         }
+     }
+     auto orig = DMN_ORIG(res_QueryInterface, This);
+-    return orig ? orig(This, riid, ppv) : E_NOINTERFACE;
++    HRESULT hr = orig ? orig(This, riid, ppv) : E_NOINTERFACE;
++    if(hr==E_NOINTERFACE && ppv && dmn_iid_eq(riid,__uuidof(IDXGIResource1)) && orig) {
++        IDXGIResource* b=nullptr;
++        if(SUCCEEDED(orig(This,__uuidof(IDXGIResource),(void**)&b)) && b){*ppv=new WineResource1(b);return S_OK;}
++    }
++    return hr;
+ }
+ 
+ /* == D3D11 producer-fence object thunks ==================================== */
+@@ -2117,6 +2153,8 @@ UINT64 STDMETHODCALLTYPE hook_f11_GetCompletedValue(ID3D11Fence* This) {
+ HRESULT STDMETHODCALLTYPE hook_f11_SetEventOnCompletion(
+         ID3D11Fence* This, UINT64 value, HANDLE ev) {
+     auto orig = DMN_ORIG(f11_SetEventOnCompletion, This);
++    // Wine owns application HANDLEs; never dereference them as dxn events.
++    if (getenv("SM2_NATIVE_RUN")) return orig ? orig(This, value, ev) : E_FAIL;
+     /* Pin ev BEFORE the registration: the moment orig registers it,
+      * D3DMetal's completion (fired on its own safe duplicate) can land and
+      * the caller may close ev in response -- while the slot watcher below
+@@ -2655,6 +2693,8 @@ UINT64 STDMETHODCALLTYPE hook_f12_GetCompletedValue(ID3D12Fence* This) {
+ HRESULT STDMETHODCALLTYPE hook_f12_SetEventOnCompletion(
+         ID3D12Fence* This, UINT64 value, HANDLE ev) {
+     auto orig = DMN_ORIG(f12_SetEventOnCompletion, This);
++    // Wine owns application HANDLEs; never dereference them as dxn events.
++    if (getenv("SM2_NATIVE_RUN")) return orig ? orig(This, value, ev) : E_FAIL;
+     /* Same pin-before-registration as hook_f11_SetEventOnCompletion. */
+     void* pin = ev ? dmn_event_duplicate(ev) : nullptr;
+     HRESULT hr = orig ? orig(This, value, ev) : E_FAIL;
+@@ -2676,6 +2716,8 @@ HRESULT STDMETHODCALLTYPE hook_f12_Signal(ID3D12Fence* This, UINT64 value) {
+ 
+ HRESULT STDMETHODCALLTYPE hook_queue_Signal(
+         ID3D12CommandQueue* This, ID3D12Fence* fence, UINT64 value) {
++    if(FILE*f=fopen("/Users/YOUR_USER/Games/VR-Tests/SpiderMan2-REALVR/Debug/native-fence.log","a")){fprintf(f,"queue signal q=%p fence=%p value=%llu\n",This,fence,(unsigned long long)value);fclose(f);}
++
+     auto orig = DMN_ORIG(queue_Signal, This);
+     HRESULT hr = orig ? orig(This, fence, value) : E_FAIL;
+     if (SUCCEEDED(hr)) {
+diff --git a/src/dmn_fence_d3d.cpp b/src/dmn_fence_d3d.cpp
+index e983b50..217157b 100644
+--- a/src/dmn_fence_d3d.cpp
++++ b/src/dmn_fence_d3d.cpp
+@@ -131,6 +131,8 @@ void open_producer_view(GpuFence* gf) {
+ }
+ 
+ void register_producer(IUnknown* fence, GpuFence* gf) {
++    if(FILE*f=fopen("/Users/YOUR_USER/Games/VR-Tests/SpiderMan2-REALVR/Debug/native-fence.log","a")){fprintf(f,"register producer fence=%p id=%p\n",fence,dmn_com_identity(fence));fclose(f);}
++
+     void* id = dmn_com_identity(fence);
+     {
+         std::lock_guard<std::mutex> lk(g_fence_mtx);
+@@ -388,6 +390,8 @@ ImportedFence* import_open(const dxn_shared_fence* pod, bool is_d3d12) {
+ }
+ 
+ void register_import(IUnknown* fence, ImportedFence* imp) {
++    if(FILE*f=fopen("/Users/YOUR_USER/Games/VR-Tests/SpiderMan2-REALVR/Debug/native-fence.log","a")){fprintf(f,"register import fence=%p id=%p\n",fence,dmn_com_identity(fence));fclose(f);}
++
+     imp->realFence = fence; /* borrowed, see ImportedFence */
+     void* id = dmn_com_identity(fence);
+     {
+@@ -426,6 +430,12 @@ void import_raise_d3d11(ImportedFence* imp, ID3D11DeviceContext4* c,
+  * entry points: the hooked ones merge the slot, which may already hold the
+  * value this caller is about to publish. */
+ void wait_local_completion(ID3D11Fence* f, UINT64 value) {
++    if (getenv("SM2_NATIVE_RUN")) {
++        while (dmn_hooks_f11_completed_orig(f) < value) {
++            struct timespec ns = {0, 200 * 1000}; nanosleep(&ns, nullptr);
++        }
++        return;
++    }
+     void* ev = dmn_event_create(1, 0);
+     if (ev && SUCCEEDED(dmn_hooks_f11_seoc_orig(f, value, ev))) {
+         dmn_event_wait(ev, DXN_WAIT_INFINITE);
+@@ -440,6 +450,12 @@ void wait_local_completion(ID3D11Fence* f, UINT64 value) {
+ }
+ 
+ void wait_local_completion(ID3D12Fence* f, UINT64 value) {
++    if (getenv("SM2_NATIVE_RUN")) {
++        while (dmn_hooks_f12_completed_orig(f) < value) {
++            struct timespec ns = {0, 200 * 1000}; nanosleep(&ns, nullptr);
++        }
++        return;
++    }
+     void* ev = dmn_event_create(1, 0);
+     if (ev && SUCCEEDED(dmn_hooks_f12_seoc_orig(f, value, ev))) {
+         dmn_event_wait(ev, DXN_WAIT_INFINITE);
+@@ -767,6 +783,8 @@ void dmn_fd3d_after_ctx_signal(ID3D11Fence* fence, UINT64 value) {
+ }
+ 
+ void dmn_fd3d_on_queue_signal(ID3D12Fence* fence, UINT64 value) {
++    if(FILE*f=fopen("/Users/YOUR_USER/Games/VR-Tests/SpiderMan2-REALVR/Debug/native-fence.log","a")){fprintf(f,"fence dispatch id=%p producer=%p import=%p value=%llu\n",dmn_com_identity(fence),lookup_producer(fence),lookup_import(fence),(unsigned long long)value);fclose(f);}
++
+     if (GpuFence* gf = lookup_producer(fence)) {
+         if (gf->is_d3d12)
+             gpufence_signal_d3d12(gf, value);

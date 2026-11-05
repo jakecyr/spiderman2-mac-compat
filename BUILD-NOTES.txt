@@ -1,0 +1,11 @@
+Diagnostic Wine loader (x86_64, own unsigned test executable):
+clang -arch x86_64 -O2 -o wine-debug-loader wine-debug-loader.c -Wl,-no_pie,-image_base,0x200000000,-no_huge,-no_fixup_chains,-pagezero_size,0x1000,-segalign,0x1000,-segaddr,WINE_RESERVE,0x1000,-segaddr,WINE_TOP_DOWN,0x7ff000000000
+
+Source and runtime paths must be adapted first. This does not change the
+installed CrossOver signature or system security. Never point the native
+vtable hooks at the mod's PE wrapper device; unwrap via a tiny D3D11 texture's
+GetDevice result first, as device_trace.h does.
+
+RenderMode2 enum for tested build: 1/3 rate=2, Legacy AER=6, Mono=7.
+Mono mapping was verified from the installed binary's option table.
+Version-specific offsets must be revalidated when updating R.E.A.L. VR.
