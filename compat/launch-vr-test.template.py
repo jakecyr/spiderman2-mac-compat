@@ -57,6 +57,8 @@ if os.environ.get('SM2_VR_NATIVE_SHARING') == '1':
                WINEDLLPATH=cxroot + '/lib/wine', SM2_NATIVE_RUN='game-' + uuid.uuid4().hex,
                DMN_LOG='warn', SM2_NO_KEYED_MUTEX='1')
     cmd = [str(ROOT / 'Debug' / 'wine-debug-loader'), str(GAME)]
+if env.get('SM2_QUEST_GAMEPAD') == '1':
+    env['WINEDLLOVERRIDES'] += ';xinput1_4=n,b'
 cmd += j.get('game_parameters', []) + j.get('egl_parameters', []) + j.get('user_parameters', [])
 if env.get('SM2_VR_SKIP_LAUNCHER') == '1':
     cmd.append('-nolauncher')

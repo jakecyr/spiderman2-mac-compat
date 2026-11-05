@@ -5,12 +5,13 @@ mode="${1:-help}"
 if [[ $# -gt 0 ]]; then shift; fi
 case "$mode" in
   flat|vr) exec /usr/bin/python3 "$root/scripts/launch.py" "$mode" "$@" ;;
+  quest) exec /usr/bin/python3 "$root/scripts/launch.py" vr --render third --quest "$@" ;;
   mono) exec /usr/bin/python3 "$root/scripts/launch.py" vr --render mono "$@" ;;
   stereo) exec /usr/bin/python3 "$root/scripts/launch.py" vr --render third "$@" ;;
   check)
     /usr/bin/python3 "$root/scripts/launch.py" flat --check
     exec /usr/bin/python3 "$root/scripts/launch.py" vr --check ;;
   help|-h|--help)
-    printf '%s\n' 'Usage: ./play {flat|vr|mono|stereo|check}' '  flat    Original non-VR game' '  vr      VR with saved settings' '  mono    VR without stereo depth' '  stereo  VR with the previous 1/3-rate stereo setting' '  check   Validate paths without launching' ;;
+    printf '%s\n' 'Usage: ./play {flat|vr|mono|stereo|quest|check}' '  flat    Original non-VR game' '  vr      VR with saved settings' '  mono    VR without stereo depth' '  stereo  VR with the previous 1/3-rate stereo setting' '  quest   Experimental Quest controls with stereo VR' '  check   Validate paths without launching' ;;
   *) printf 'Unknown mode: %s\n' "$mode" >&2; exit 2 ;;
 esac

@@ -57,14 +57,22 @@ static LONG CALLBACK crash_trace(EXCEPTION_POINTERS* e){
  return EXCEPTION_CONTINUE_SEARCH;
 }
 '''
-source += '\n#include \"device_trace.h\"\n#include \"mod_trace.h\"\n'
+source += '\n#include \"device_trace.h\"\n#include \"mod_trace.h\"\n#include \"quest-input/openxr_gamepad.h\"\n'
+extras['xrCreateSession'] += 'if(r>=0)qinit(instance,*session);'
+extras['xrPollEvent'] = 'if(r==XR_SUCCESS)qevent(eventData);'
+extras['xrDestroySession'] = 'qdestroy(session);'
 for name, args in decls.items():
     params = [re.search(r'(\w+)(?:\[[^]]*\])?$', part.strip())[1] for part in args.split(',')]
     source += f'static PFN_{name} real_{name};\n'
     source += f'static XrResult XRAPI_CALL wrap_{name}({args}) {{\n'
     if name == 'xrCreateSwapchain': source += 'runtime_swapchain_creation++;\n'
+    if name == 'xrBeginSession': source += 'qattach_if_needed(session);\n'
+    if name == 'xrEndFrame': source += 'qpoll(session);\n'
+    if name == 'xrAttachSessionActionSets':
+        source += 'XrSessionActionSetsAttachInfo augmented=*attachInfo;XrActionSet sets[64];if(qpad.set && session==qpad.session && !qpad.attached && attachInfo->countActionSets<63){memcpy(sets,attachInfo->actionSets,attachInfo->countActionSets*sizeof(XrActionSet));sets[attachInfo->countActionSets]=qpad.set;augmented.countActionSets++;augmented.actionSets=sets;attachInfo=&augmented;}\n'
     source += f'trace("CALL {name}"); XrResult r=real_{name}({", ".join(params)}); trace("RETURN {name} %d",r);\n'
     if name == 'xrCreateSwapchain': source += 'runtime_swapchain_creation--;\n'
+    if name == 'xrAttachSessionActionSets': source += 'if(r>=0 && qpad.set && session==qpad.session)qpad.attached=1;\n'
     source += extras.get(name, '') + '\nreturn r;\n}\n'
 source += '''
 static XrResult XRAPI_CALL getproc(XrInstance instance,const char *name,PFN_xrVoidFunction *fn) {

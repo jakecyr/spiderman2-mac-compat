@@ -17,8 +17,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', choices=['flat', 'vr'])
     parser.add_argument('--render', choices=['keep', 'mono', 'third'], default='keep')
+    parser.add_argument('--quest', action='store_true', help='Use the experimental Quest-to-gamepad bridge (VR only)')
     parser.add_argument('--check', action='store_true', help='Validate paths without launching or changing settings')
     args = parser.parse_args()
+    if args.quest and args.mode != 'vr':
+        parser.error('--quest applies only to VR')
     cfg = json.loads((ROOT / 'local.json').read_text())
     cfg = {k: os.path.expanduser(v) for k, v in cfg.items()}
     state = ROOT / 'state'
@@ -60,6 +63,8 @@ def main():
             print(f'VR render mode: {args.render}; configuration backup saved.', flush=True)
         env = os.environ.copy()
         env.update(SM2_VR_NATIVE_SHARING='1', SM2_VR_SKIP_LAUNCHER='1')
+        if args.quest:
+            env['SM2_QUEST_GAMEPAD'] = '1'
         raise SystemExit(subprocess.call(['/usr/bin/python3', str(vr / 'launch-vr-test.py')], cwd=vr, env=env))
     if args.render != 'keep':
         raise SystemExit('--render applies only to VR.')

@@ -114,3 +114,25 @@ project scripts/probes are MIT licensed. d3dmetal-native changes retain its
 MIT license; Wine-derived loader and main.h retain LGPL-2.1-or-later and
 copyright notices (licenses/Wine-COPYING.LIB). No proprietary DLLs are
 redistributed. The launcher template references external executables only.
+
+Quest input bridge update
+-------------------------
+make quest / ./play quest selects stereo and opts into SM2_QUEST_GAMEPAD=1.
+Only this mode enables the isolated game's native xinput1_4 bridge.
+OpenXR session integration passed a120frame render test with application and
+bridge action sets together. Windows XInput receiver tests passed button,
+axis, seqlock, stale-update and disconnected handling. Actual Quest motion
+and buttons are still unverified: the observed input samples were allzero.
+
+Bindings: sticks move/look, A/B/X/Y, triggers LT/RT, grips LB/RB, stick clicks
+L3/R3, left Menu Start. Menu+right stick is a preliminary D-pad modifier and
+may briefly pause the game before activation; requires testing. Back and
+vibration are not implemented. This maps buttons, not hand-directed physics.
+
+Source: compat/quest-input/openxr_gamepad.h (producer) and xinput.c (receiver).
+The runtime generator includes the header; opt-in flag absent means inert.
+Receiver build:
+x86_64-w64-mingw32-gcc -shared -static -O2 -o xinput1_4.dll compat/quest-input/xinput.c compat/quest-input/xinput.def
+Install the result only in the isolated Game directory. Do not replace the
+flat game's input DLLs. The first-person camera still needs ModSettings1.0.2;
+make quest does not yet enable that camera or prove first-person gameplay.
