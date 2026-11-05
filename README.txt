@@ -11,18 +11,22 @@ This is a source/research kit, NOT a turnkey mod installer.
 
 Double-click launchers (configured on this Mac)
 ----------------------------------------------
-Launch Flat.command: original Epic install, CrossOver bottle SpiderMan2-CX25.
-Launch VR.command: isolated VR copy, preserving the selected render mode.
-Launch VR Mono.command: isolated VR copy, backs up RealVR.ini and selects Mono.
+flat.command: original Epic install, CrossOver bottle SpiderMan2-CX25.
+vr.command: isolated VR copy, preserving the selected render mode.
+mono.command: isolated VR copy, backs up RealVR.ini and selects Mono.
 Exit the game normally before switching. Dismiss its graphics warning when
 shown. Open MoltenVR on the Quest for VR. Mono loses stereo depth.
 
-Command-line alternatives:
-  python3 scripts/launch.py flat --check
-  python3 scripts/launch.py vr --check
-  python3 scripts/launch.py flat
-  python3 scripts/launch.py vr --render mono
-  python3 scripts/launch.py vr --render third
+Quick commands (from this folder):
+  make flat       # Original non-VR game
+  make vr         # VR with saved settings
+  make mono       # VR without stereo depth
+  make stereo     # Restore previous 1/3-rate stereo setting
+  make check      # Validate launch paths without starting a game
+
+Equivalent Bash launcher: ./play flat, ./play vr, ./play mono,
+./play stereo, or ./play check. Run ./play or make for help.
+The play script also works by absolute path from another directory.
 
 local.json contains this Mac's paths and is ignored by Git. Other machines
 must copy local.example.json to local.json and adapt it. The VR launcher
