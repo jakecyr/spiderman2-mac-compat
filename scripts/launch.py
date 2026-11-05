@@ -70,25 +70,17 @@ def main():
         raise SystemExit('--render applies only to VR.')
     env = os.environ.copy()
     env['LEGENDARY_CONFIG_PATH'] = cfg['legendary_config']
-    result = subprocess.run([
-        cfg['legendary'], 'launch', '0c6db5941ac8420aabbd8510e94e7d9a', '--json',
-        '--crossover-app', cfg['crossover_app'], '--crossover-bottle', cfg['flat_bottle'],
-    ], capture_output=True, text=True, env=env)
-    if result.returncode:
-        raise SystemExit('Epic authorization failed. Refresh the Epic login in Heroic.')
-    meta = json.loads(result.stdout)
-    game = Path(cfg['flat_game'])
-    if Path(meta['working_directory']).resolve() != game.parent.resolve():
-        raise SystemExit('Heroic game directory differs from flat_game; refusing to launch the wrong copy.')
-    env.update(meta.get('environment', {}))
-    # Never inherit the experimental VR runtime into the original flat bottle.
-    for key in ['WINEDLLOVERRIDES', 'WINEPREFIX', 'WINELOADER', 'WINELOADERNOEXEC', 'WINESERVER', 'WINEDLLPATH', 'SM2_NATIVE_RUN', 'SM2_NO_KEYED_MUTEX', 'SM2_QUEST_GAMEPAD', 'XR_RUNTIME_JSON', 'XR_API_LAYER_PATH', 'DYLD_INSERT_LIBRARIES']:
+    # Match the successful original launch: let Legendary invoke CrossOver itself.
+    # CrossOver's bottle owns graphics, AVX and synchronization settings.
+    for key in ['WINEDLLOVERRIDES', 'WINEPREFIX', 'WINELOADER', 'WINELOADERNOEXEC',
+                'WINESERVER', 'WINEDLLPATH', 'WINEMSYNC', 'WINEESYNC', 'WINEFSYNC',
+                'CX_ROOT', 'CX_BOTTLE', 'CX_GRAPHICS_BACKEND', 'SM2_NATIVE_RUN',
+                'SM2_NO_KEYED_MUTEX', 'SM2_QUEST_GAMEPAD', 'XR_RUNTIME_JSON',
+                'XR_API_LAYER_PATH', 'DYLD_INSERT_LIBRARIES']:
         env.pop(key, None)
-    env.update(CX_BOTTLE=cfg['flat_bottle'], CX_ROOT=str(cx), CX_GRAPHICS_BACKEND='d3dmetal',
-               WINEMSYNC='0', WINEESYNC='0', WINEFSYNC='0', ROSETTA_ADVERTISE_AVX='1', WINEDEBUG='-all')
-    command = [str(cx / 'bin/wine'), '--bottle', cfg['flat_bottle'], '--no-update', str(game)]
-    for key in ['game_parameters', 'egl_parameters', 'user_parameters']:
-        command += meta.get(key, [])
+    game = Path(cfg['flat_game'])
+    command = [cfg['legendary'], 'launch', '0c6db5941ac8420aabbd8510e94e7d9a',
+               '--crossover-app', cfg['crossover_app'], '--crossover-bottle', cfg['flat_bottle']]
     print('Launching original flat game with CrossOver; VR modifications are isolated.', flush=True)
     log_path = state / 'flat-launch.log'
     with log_path.open('w') as log:
