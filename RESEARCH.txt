@@ -136,3 +136,23 @@ x86_64-w64-mingw32-gcc -shared -static -O2 -o xinput1_4.dll compat/quest-input/x
 Install the result only in the isolated Game directory. Do not replace the
 flat game's input DLLs. The first-person camera still needs ModSettings1.0.2;
 make quest does not yet enable that camera or prove first-person gameplay.
+
+First-person camera installation preparation
+-------------------------------------------
+The official Overstrike1.9.0 script loader's SM2 argument-parser signature
+has exactly one match in the installed2.810.0.0 executable. This establishes
+loader pattern compatibility, not the camera mod's runtime compatibility.
+
+scripts/install_camera.py accepts the user-downloaded camera and ModSettings
+archives, validates MSM2 script packages, installs only into the isolated VR
+copy, preserves other scripts, and saves a file manifest/backups in ignored
+state/. --check validates without writing game files. No mods redistributed.
+
+Use ModSettings from Nexus mod579 MAIN FILES, not ModSettings Lib. The camera
+manifest's1.0.2 dependency is a baseline; newer runtime versions need their
+export/API compatibility checked when downloaded. Current camera package
+imports modsettings.dll directly, so it cannot load without it.
+
+The VR helper recognizes Records/camera-mod-install.json after a successful
+install and adds native winmm plus -scripts. Until that marker exists nothing
+changes. No first-person camera has been installed or verified yet.

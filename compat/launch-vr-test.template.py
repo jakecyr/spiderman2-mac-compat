@@ -60,6 +60,12 @@ if os.environ.get('SM2_VR_NATIVE_SHARING') == '1':
 if env.get('SM2_QUEST_GAMEPAD') == '1':
     env['WINEDLLOVERRIDES'] += ';xinput1_4=n,b'
 cmd += j.get('game_parameters', []) + j.get('egl_parameters', []) + j.get('user_parameters', [])
+camera_marker = ROOT / 'Records/camera-mod-install.json'
+if camera_marker.exists() and json.loads(camera_marker.read_text()).get('enabled'):
+    for required in ['winmm.dll', 'scripts.txt', 'scripts/modsettings.dll', 'scripts/sm2_first_person_camera.dll']:
+        assert (GAME.parent / required).is_file(), 'Camera mod installation is incomplete: ' + required
+    env['WINEDLLOVERRIDES'] += ';winmm=n,b'
+    cmd.append('-scripts')
 if env.get('SM2_VR_SKIP_LAUNCHER') == '1':
     cmd.append('-nolauncher')
 print('Launching isolated Spider-Man 2 VR test with ' + ('MoltenVR Wine 11/D3DMetal 3.' if managed else 'CrossOver 25.1.1.'), flush=True)
