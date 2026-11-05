@@ -1,116 +1,276 @@
-Spider-Man 2 on Apple Silicon: experimental compatibility research
-=================================================================
+Spider-Man 2 on Mac — setup and play
+===================================
 
-Status, 2026-11-05
-The user confirmed visible gameplay in a Quest 3S using the isolated VR
-setup. Stereo mode was slow: a screenshot showed 17.4 FPS / 353 ms latency.
-Mono is the next performance experiment, not a verified performance fix.
-Long-session stability, portability, first-person camera support and Quest
-controller mapping remain unverified. Use an Xbox controller paired to macOS.
-This is a source/research kit, NOT a turnkey mod installer.
+Play the Epic Games PC edition on an Apple Silicon Mac, with an optional
+experimental Meta Quest VR setup. This repository contains convenient launch
+commands and the compatibility research used on our test Mac.
 
-Double-click launchers (configured on this Mac)
-----------------------------------------------
-flat.command: original Epic install, CrossOver bottle SpiderMan2-CX25.
-vr.command: isolated VR copy, preserving the selected render mode.
-mono.command: isolated VR copy, backs up RealVR.ini and selects Mono.
-Exit the game normally before switching. Dismiss its graphics warning when
-shown. Open MoltenVR on the Quest for VR. Mono loses stereo depth.
+Already set up on this Mac? Skip to "Play next time" below.
+Setting up another Mac? Start at Step 1.
 
-Quick commands (from this folder):
-  make flat       # Original non-VR game
-  make vr         # VR with saved settings
-  make mono       # VR without stereo depth
-  make stereo     # Restore previous 1/3-rate stereo setting
-  make check      # Validate launch paths without starting a game
-
-Equivalent Bash launcher: ./play flat, ./play vr, ./play mono,
-./play stereo, or ./play check. Run ./play or make for help.
-The play script also works by absolute path from another directory.
-
-local.json contains this Mac's paths and is ignored by Git. Other machines
-must copy local.example.json to local.json and adapt it. The VR launcher
-uses the existing external isolated installation and diagnostic binaries;
-copying this repository alone does not install that environment. Saves remain
-in their existing separate bottles. These scripts do not synchronize saves.
-Flat launch path validation passed; a full new flat launch has not been tested
-in this session, to avoid opening a second game alongside the VR test.
-
-Tested components
+What works so far
 -----------------
-CrossOver 25.1.1; D3DMetal; MSync off; AVX advertised via Rosetta.
-Epic Spider-Man 2 v2.810.0.0; R.E.A.L. VR 2607.31.1; MoltenVR 1.2.0.
-Mac mini Apple Silicon; Quest 3S. No game, R.E.A.L. VR, CrossOver or MoltenVR
-binaries are included. Obtain each component separately and legally.
+The original flat-screen game launched and saved successfully. With the custom
+VR fixes, the user also confirmed visible gameplay on a Quest 3S. VR is still
+experimental: stereo gameplay showed about 17 FPS and 353 ms latency in one
+sample. Mono is being tested for responsiveness; improvement is not verified.
 
-What the compatibility changes do
---------------------------------
-1. Supply D3DMetal shared textures/fences using d3dmetal-native's native hooks
-   without replacing Wine's GFXT host interface.
-2. Provide an IDXGIResource1 fallback and shared backing for VR swapchains.
-3. Warm a native command queue so pre-existing game queues receive Signal hooks.
-4. Poll actual GPU completion for signal-back under Wine instead of waiting
-   on native event objects that Wine cannot signal.
-5. Leave application SetEventOnCompletion handles with the original Wine
-   implementation. Treating Windows HANDLE values as native event pointers
-   caused access violations. Shared-slot-only Windows event notification still
-   needs further validation; do not claim universal shared-fence correctness.
-6. Disable the added keyed-mutex interface for this test so the mod uses fences.
-7. Version-guarded in-memory geometry/HUD fallback for zero dimensions and a
-   narrowly guarded writable-native-vtable compatibility shim.
+The launchers are ready for the existing installation on this Mac. A fresh
+Mac still needs manual compatibility work for VR; this repository is not an
+automatic VR installer. See Step 5 before buying anything specifically for VR.
 
-Research source layout
-----------------------
-patches/d3dmetal-native.patch targets upstream commit
-  af1ee1710711fadff41dead87960d0f1336c1047
-  https://github.com/utmapp/d3dmetal-native
-After applying, copy compat/wine_probe_bridge.cpp into its src directory.
-Follow upstream's x86_64 Meson build instructions; retain its subprojects.
-The patch adds that bridge to meson.build. Do NOT call dmn_init() in Wine.
+What you need
+-------------
+- An Apple Silicon Mac. Our test machine is a Mac mini M5 Pro with 24 GB RAM;
+  this is a tested configuration, not a proven minimum requirement.
+- Space for the game and its separate VR copy. Our installed game occupied
+  about 138 GiB. APFS clones can initially share storage, but updates and
+  modifications need more space; allow substantial headroom.
+- The PC edition of Marvel's Spider-Man 2 from Epic Games.
+- Heroic Games Launcher and CodeWeavers CrossOver.
+- An Xbox-compatible controller, or keyboard and mouse.
+- For VR: a Quest headset (tested: Quest 3S), USB-C data cable, MoltenVR,
+  R.E.A.L. VR, and the custom compatibility build described in Step 5.
 
-compat/ contains the Wine diagnostic loader, OpenXR tracing generator,
-version-specific mod instrumentation, and the OpenVR forwarding shim.
-Paths are deliberately redacted to /Users/YOUR_USER. Replace them consistently
-in a private working copy before compiling. They are not portable defaults.
-The generator additionally requires Khronos openxr.h and openxr_platform.h,
-which are not vendored here. OpenXR loader/real runtime configuration must
-point to the appropriate locally installed runtime. Do not deploy while a
-game has these DLLs loaded. The loader derives from Wine 10.0 loader/main.c.
+Tested software versions:
+  CrossOver 25.1.1 / D3DMetal
+  Spider-Man 2 2.810.0.0 (Epic)
+  R.E.A.L. VR 2607.31.1
+  MoltenVR 1.2.0
 
-Example build commands (from a prepared compat working directory):
-  x86_64-w64-mingw32-gcc -shared -O0 -g -static -o trace_runtime.dll trace_runtime.c
-  x86_64-w64-mingw32-gcc -shared -O2 -g -static -o openvr_compat.dll vtable_compat.c writable_probe.S openvr_compat.def
-The trace generator must run before compiling trace_runtime.c.
-The diagnostic Wine loader needs the custom address layout documented in
-BUILD-NOTES.txt; a normal default clang invocation is insufficient.
+Newer versions are not automatically interchangeable. The VR instrumentation
+uses version-specific checks and offsets. Do not update the working copy
+without keeping a recoverable backup.
 
-Probes and evidence
--------------------
-probes/ holds small source tests, not game code. Compile each with MinGW g++:
-  x86_64-w64-mingw32-g++ -static -O0 NAME.cpp -o NAME.exe -ld3d11 -ld3d12 -ldxgi
-Run using the diagnostic loader, a unique SM2_NATIVE_RUN, the isolated prefix,
-and CrossOver 25's CX_ROOT / WINESERVER / WINEDLLPATH. Do not reuse bridge
-pointer files across processes. WINELOADERNOEXEC=1 and
-CX_GRAPHICS_BACKEND=d3dmetal are required.
+Step 1 — Get the game and install the Mac apps
+---------------------------------------------
+1. Buy or use your existing Epic PC copy of Marvel's Spider-Man 2:
+   https://store.epicgames.com/p/marvels-spider-man-2
+   A PlayStation purchase is not the Epic PC license used by these scripts.
+   Steam ownership is not supported by the current Epic-specific launchers.
+2. Download Heroic for macOS and move it to Applications:
+   https://heroicgameslauncher.com/
+   Heroic signs in to Epic and downloads the Windows game on the Mac.
+3. Install CodeWeavers CrossOver:
+   https://www.codeweavers.com/crossover/download-links
+   This setup used version 25.1.1. Use an official CodeWeavers download/account
+   source for that version if available. CrossOver 26.3 did not work in our
+   initial tests; the latest download is not a verified substitute.
+4. Allow macOS to install Rosetta if prompted when opening Intel software.
+5. Open Heroic, sign in to Epic, complete any verification, and download the
+   game. Our install folder is ~/Games/Heroic/marvelsspiderman2.
 
-Observed results:
-- D3D12 producer -> D3D11 consumer fence: passed.
-- D3D11 producer -> D3D12 imported signal-back: failed before polling fix,
-  passed after (producer=1, consumer=1).
-- Windows event SetEventOnCompletion + WaitForSingleObject: passed after fix.
-- Queue created before hook installation: passed after warm-queue fix.
-- D3D12 texture write -> D3D11 original texture read: passed.
-- D3D11 write -> D3D12 read: unresolved; not all sharing directions are proven.
-- In-game fences progressed to 229 before the separate event-handle crash.
-- After event fix: user confirmed live headset gameplay; low FPS remains.
-Raw logs, crash dumps, account identifiers, saves and exchange tokens are
-excluded. Never commit the external Game, Records, or bottle directories.
+Heroic is the Epic launcher used by this setup. You do not need to install
+the separate Epic Games Launcher just to follow this workflow.
 
-Sharing and licensing
----------------------
-This is a local Git repository; nothing has been published to GitHub.
-Review and adapt the research before proposing upstream patches. Original
-project scripts/probes are MIT licensed. d3dmetal-native changes retain its
-MIT license; Wine-derived loader and main.h retain LGPL-2.1-or-later and
-copyright notices (licenses/Wine-COPYING.LIB). No proprietary DLLs are
-redistributed. The launcher template references external executables only.
+Step 2 — Get the normal game working first
+------------------------------------------
+A CrossOver "bottle" is a separate Windows environment. Keep one for normal
+play and a different one for VR.
+
+1. Create a 64-bit Windows bottle in CrossOver called SpiderMan2-CX25.
+2. Enable D3DMetal for that bottle and disable MSync.
+3. In Heroic's settings for this game, select CrossOver 25.1.1 and the
+   SpiderMan2-CX25 bottle. Enable "Advertise AVX for Rosetta". The launch
+   scripts also set ROSETTA_ADVERTISE_AVX=1 and WINEMSYNC=0.
+4. Install the two bundled PlayStation PC SDK packages INTO THIS SAME BOTTLE:
+     PsPcSdkRuntimeManager.msi
+     PsPcSdkRuntimeInstaller.msi
+   They are in the downloaded game's folder. Use CrossOver's installer or
+   Run Command for the selected bottle. Do not download replacement DLLs
+   from unrelated sites. Both packages were installed in our successful setup.
+5. Launch from Heroic. If the graphics warning seen in our tests appears,
+   dismiss it, then choose Play in the game's startup launcher if shown.
+6. Confirm that you can reach gameplay. Make a manual save, quit through the
+   game menu, relaunch, and check that Continue/Load Game finds the save.
+
+If the game only shows black, first check the exact CrossOver version,
+bottle selection, D3DMetal, AVX option, and installed PlayStation SDK.
+Do not add VR until the normal game works.
+
+Step 3 — Pair the controller
+----------------------------
+1. Put the Xbox controller into Bluetooth pairing mode.
+2. On the Mac, open System Settings > Bluetooth and connect the controller.
+3. Test it in the normal game. Pair it with macOS, not inside Heroic.
+
+For this setup, keep using the Xbox controller in VR. Quest motion-controller
+mapping and hand-controlled web swinging are not implemented here. The tested
+VR view retains the third-person camera; a first-person mode is not verified.
+
+Step 4 — Set up the optional Quest connection
+--------------------------------------------
+Skip this step if you only want flat-screen play.
+
+1. Download MoltenVR from its official releases and put MoltenVR.app in
+   Applications: https://github.com/MoltenVR/MoltenVR-Preview/releases
+2. Enable Developer Mode for your Quest using Meta's current setup flow.
+3. Turn on the headset and connect it to the Mac with a USB-C DATA cable.
+   Inside the headset, accept the USB-debugging prompt for your Mac.
+4. In MoltenVR on the Mac, choose Settings > Headsets > Install on headset.
+5. Open MoltenVR on the Quest (under Unknown Sources if listed there).
+   Complete pairing using the PIN shown on the Mac, if requested.
+6. Confirm that the headset connects to the Mac before starting the game.
+
+Official illustrated setup:
+https://moltenvr.com/docs/getting-started/installation
+https://moltenvr.com/docs/setup/headset-app
+
+This project uses MoltenVR's OpenXR runtime, not SteamVR. Installing SteamVR
+is not a required step. MoltenVR's default managed Wine is also not the
+CrossOver 25.1.1 environment used by our custom launch path.
+
+Step 5 — Prepare the isolated VR game (manual developer setup)
+--------------------------------------------------------------
+THIS STEP IS NOT AUTOMATED BY make vr OR make mono.
+
+The following summarizes the working installation. On a fresh Mac, a person
+comfortable building compatibility code must adapt it before the VR launcher
+will work. Installing the game, MoltenVR and the mod alone was insufficient.
+
+1. Back up the normal game's saves and keep its installation unchanged.
+2. Create a separate copy of the game at:
+     ~/Games/VR-Tests/SpiderMan2-REALVR/Game
+   Duplicate the working CrossOver bottle as SpiderMan2-VR-Test. Its Documents
+   folder must be a real isolated directory, not a link to the normal saves.
+3. Obtain R.E.A.L. VR from its author and follow the instructions for the
+   supported Spider-Man 2 build, applying it ONLY to the VR copy:
+   https://www.patreon.com/realvr
+   The mod is not included here. Availability and supported game versions
+   may change; do not assume a different release accepts our patches.
+4. Build and install the custom sharing bridge, diagnostic Wine loader,
+   OpenXR shim and OpenVR forwarding shim. The source, upstream revision,
+   build commands and known limitations are in RESEARCH.txt and BUILD-NOTES.txt.
+   Source placeholders such as /Users/YOUR_USER must be adapted first.
+5. Configure the isolated bottle's OpenXR runtime to use the tracing shim
+   forwarding to the locally installed MoltenVR runtime. Use the OpenXR
+   renderer in the R.E.A.L. overlay. The external installation must include
+   Game/, Debug/, Records/, and launch-vr-test.py as described in the research.
+6. Configure MoltenVR's game entry to use this isolated game and custom
+   CrossOver launch path. On this Mac that bridge already exists. Simply
+   adding the EXE to a new default MoltenVR bottle does not reproduce it.
+
+The compatibility fixes cover shared graphics resources, GPU completion,
+Windows event handles and zero-size VR textures. They have enabled gameplay
+on one setup; they are not a general-purpose supported driver or installer.
+
+Step 6 — Configure this repository's launchers
+----------------------------------------------
+On this Mac, local.json is already configured. Do not overwrite it.
+On another Mac, from this repository's folder:
+
+  cp local.example.json local.json
+
+Open local.json in a text editor and adjust:
+  crossover_app    Path to the CrossOver 25.1.1 app.
+  flat_game        Path to the original game's Spider-Man2.exe.
+  flat_bottle      Name of the original CrossOver bottle.
+  legendary       Heroic's bundled Legendary executable.
+  legendary_config Heroic's Epic login/configuration directory.
+  vr_root         Root of the fully prepared isolated VR installation.
+
+Keep Heroic signed in. The launchers obtain fresh Epic authorization; do not
+paste passwords or exchange tokens into local.json. This file is ignored by
+Git. The VR launcher also relies on the external launch-vr-test.py having
+matching paths; editing local.json alone does not configure that helper.
+
+Check the setup without launching:
+
+  make check
+
+This checks required file paths, not VR readiness or account validity. If
+you have only installed the normal game, check that path independently:
+
+  ./play flat --check
+
+The commands use /usr/bin/python3. If macOS has not installed the developer
+command-line tools needed for Python/make, run xcode-select --install and
+complete Apple's installer. No Homebrew installation is needed just to run
+these launchers; building the compatibility code needs additional tools.
+
+Play next time
+--------------
+Open Terminal and enter:
+
+  cd ~/Desktop/code/spiderman2-mac-compat
+
+Then choose ONE command:
+
+  make flat       Normal game on the Mac display.
+  make vr         VR using the last saved render setting.
+  make mono       VR without stereo depth; responsiveness experiment.
+  make stereo     VR with the previous 1/3-rate stereo setting.
+
+No Make? Use ./play flat, ./play vr, ./play mono or ./play stereo instead.
+For double-click launch, use flat.command, vr.command or mono.command in
+Finder. Run make or ./play for help.
+
+For VR, first open MoltenVR on the Mac and Quest and keep the headset awake.
+After launching, dismiss the game's graphics warning if shown. Select the
+Spider-Man 2 session in the headset if it does not appear automatically.
+Resume your save and check that head movement changes the view.
+
+Stop VR in the overlay stops rendering; it does not quit the game. To finish,
+make a manual save, wait for saving to finish, and quit via the game menu.
+Exit one game before starting another mode. The launchers do not terminate
+an existing game or restart it for you.
+
+Saves and backups
+-----------------
+Normal and VR play use separate save locations. These scripts do not copy or
+synchronize saves between them. Back up both before changing the setup.
+On the original setup, normal saves were under:
+  ~/Documents/Marvel's Spider-Man 2/<account-folder>/
+VR saves use the isolated bottle's Documents directory. Verify actual paths
+on your machine; CrossOver bottles can redirect Documents differently.
+
+make mono and make stereo back up RealVR.ini into this repo's ignored state/
+folder before changing the setting. They do not back up your saved games.
+
+Troubleshooting
+---------------
+"Missing required file"
+  Check local.json. For VR, finish Step 5; the source repo alone has no DLLs.
+
+"Epic authorization failed"
+  Open Heroic, refresh your Epic sign-in, and retry. Never share login tokens.
+
+"A launcher is already active" / "test is already running"
+  Exit the current game and allow its launcher to finish. If a crash left a
+  helper running, identify that specific process before stopping it. Do not
+  kill every Wine process or delete lock files as a general fix.
+
+"PlayStation PC SDK Runtime ... missing"
+  Install both bundled SDK packages in the bottle that launches this copy.
+
+Headset has sound but says "Waiting for frames"
+  Audio alone does not prove VR is rendering. Check the headset connection,
+  correct MoltenVR session, and OpenXR selection in the R.E.A.L. overlay.
+  On a fresh setup, confirm all custom compatibility components are installed.
+
+Head turning feels delayed
+  Our stereo test had very low FPS. Try make mono after exiting the game;
+  it removes stereo depth and may reduce work, but is not a guaranteed fix.
+  Keep a USB data connection for the initial test. Record FPS and latency
+  before/after. Lowering sensitivity does not fix rendering latency.
+
+Game/mod update breaks startup
+  Restore the backed-up matching test setup. The compatibility code is
+  version-specific; do not apply offsets blindly to a newer mod.
+
+For developers and sharing
+--------------------------
+RESEARCH.txt       Compatibility changes, test results and source layout.
+BUILD-NOTES.txt    Diagnostic loader build flags and render-mode values.
+compat/           Instrumentation and launcher template source.
+patches/          Patch for the pinned d3dmetal-native revision.
+probes/           Small graphics-sharing regression tests.
+licenses/         Third-party license texts.
+
+No game, mod, CrossOver or MoltenVR binaries, saves, tokens, crash dumps or
+private logs are included. Do not commit those files. The project scripts
+are MIT licensed; Wine-derived files retain LGPL-2.1-or-later and their
+copyright notices. See LICENSE and licenses/ for details.
+
+This is a local Git repository; it has not been published to GitHub.
+Setup and source links reviewed on 2026-11-05.
