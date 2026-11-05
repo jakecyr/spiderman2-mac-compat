@@ -82,15 +82,29 @@ def main():
         raise SystemExit('Heroic game directory differs from flat_game; refusing to launch the wrong copy.')
     env.update(meta.get('environment', {}))
     # Never inherit the experimental VR runtime into the original flat bottle.
-    for key in ['WINEDLLOVERRIDES', 'WINEPREFIX', 'SM2_NATIVE_RUN', 'SM2_NO_KEYED_MUTEX', 'XR_RUNTIME_JSON', 'DYLD_INSERT_LIBRARIES']:
+    for key in ['WINEDLLOVERRIDES', 'WINEPREFIX', 'WINELOADER', 'WINELOADERNOEXEC', 'WINESERVER', 'WINEDLLPATH', 'SM2_NATIVE_RUN', 'SM2_NO_KEYED_MUTEX', 'SM2_QUEST_GAMEPAD', 'XR_RUNTIME_JSON', 'XR_API_LAYER_PATH', 'DYLD_INSERT_LIBRARIES']:
         env.pop(key, None)
-    env.update(CX_BOTTLE=cfg['flat_bottle'], WINEMSYNC='0', ROSETTA_ADVERTISE_AVX='1', WINEDEBUG='-all')
+    env.update(CX_BOTTLE=cfg['flat_bottle'], CX_ROOT=str(cx), CX_GRAPHICS_BACKEND='d3dmetal',
+               WINEMSYNC='0', WINEESYNC='0', WINEFSYNC='0', ROSETTA_ADVERTISE_AVX='1', WINEDEBUG='-all')
     command = [str(cx / 'bin/wine'), '--bottle', cfg['flat_bottle'], '--no-update', str(game)]
     for key in ['game_parameters', 'egl_parameters', 'user_parameters']:
         command += meta.get(key, [])
-    # Discard launcher output: third-party diagnostics can contain account tokens.
     print('Launching original flat game with CrossOver; VR modifications are isolated.', flush=True)
-    raise SystemExit(subprocess.call(command, cwd=game.parent, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    log_path = state / 'flat-launch.log'
+    with log_path.open('w') as log:
+        proc = subprocess.Popen(command, cwd=game.parent, env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, errors='replace')
+        (state / 'flat-pid.txt').write_text(str(proc.pid))
+        for line in proc.stdout:
+            if any(word in line.lower() for word in ['auth_password', 'auth_login', 'exchange_code', 'access_token', 'refresh_token', 'command line', 'commandline']):
+                log.write('[authorization/command-line diagnostic omitted]\n')
+            else:
+                log.write(line)
+            log.flush()
+        code = proc.wait()
+    print(f'Flat game exited ({code}). Diagnostics: {log_path}', flush=True)
+    raise SystemExit(code)
+
 
 if __name__ == '__main__':
     main()
