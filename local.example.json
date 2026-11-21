@@ -3,6 +3,8 @@
   "crossover_app": "~/Applications/CrossOver 25.1.1.app",
   "flat_game": "~/Games/Heroic/marvelsspiderman2/Spider-Man2.exe",
   "flat_bottle": "SpiderMan2-CX25",
+  "highball_home": "~/Library/Application Support/Highball",
+  "highball_bottle": "Games",
   "legendary": "/Applications/Heroic.app/Contents/Resources/app.asar.unpacked/build/bin/arm64/darwin/legendary",
   "legendary_config": "~/Library/Application Support/heroic/legendaryConfig/legendary"
 }

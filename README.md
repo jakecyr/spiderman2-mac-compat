@@ -20,16 +20,18 @@ automatic VR installer. See Step 5 before buying anything specifically for VR.
 
 ## Flat-screen play with Highball
 
-Highball can launch the Epic copy already installed by Heroic. On the M5 Pro
-test Mac, Highball 0.10.26 with the Sikarugir Wine 10 r28 engine launched the
-game. At High settings, play stuttered and the Mac froze while storage was
-nearly full and swap was exhausted. Performance at lower settings is unverified.
+Highball can launch the Epic copy already installed by Heroic. The latest
+working setup was Highball 0.10.26 on a Mac mini M5 Pro with 24 GB RAM and
+macOS 27.2.1. It used Sikarugir Wine 10 r29 with D3DMetal 4.0 beta 2.
+The game log recorded 76 minutes between the first and last FPS samples,
+with a median of 30 FPS across 77 samples and no unhandled exception.
 
-1. Install [Highball](https://gethighball.com/docs/install/) and finish its
-   first-run setup. Use a Wine engine that runs through Rosetta.
-2. In the Highball environment, review Apple's D3DMetal license, select
-   D3DMetal, enable **Advertise AVX to games**, and set synchronization to
-   **None**.
+1. Install Highball and finish its first-run setup. [Highball install guide](https://gethighball.com/docs/install/)
+2. In **Settings → Environments**, open the **Games** environment's settings.
+   Under **Advanced → Engine**, select **Wine 10.0 (Sikarugir) r29,
+   D3DMetal 4.0 beta 2**. Review Apple's D3DMetal license and select
+   **D3DMetal** under **Graphics**. Under **Compatibility**, enable
+   **Advertise AVX to games** and set synchronization to **None**.
 3. In that environment, run `PsPcSdkRuntimeManager.msi` and then
    `PsPcSdkRuntimeInstaller.msi` from the existing game folder.
 4. With Heroic already signed in to Epic, set `flat_game`, `legendary`, and
@@ -39,9 +41,10 @@ nearly full and swap was exhausted. Performance at lower settings is unverified.
 5. Run `./play highball --check`, then `make highball`. Dismiss the graphics
    driver warning if it appears.
 
-If the game stutters, start with Windowed mode at 1600×900, the Low preset,
-ray tracing and frame generation off, and FSR with dynamic resolution
-targeting 30 FPS. Check macOS memory pressure and free storage as well.
+The working run used Windowed mode, Medium textures, Low shadows, and FSR
+dynamic resolution targeting 30 FPS. Ray tracing and frame generation were
+off. If the game stutters, start with a 1600×900 window and check macOS memory
+pressure and free storage.
 [Nixxes performance guide](https://support.nixxes.com/hc/en-us/articles/49284471919635-Marvel-s-Spider-Man-2-PC-Performance-Tuning)
 
 ## What you need
@@ -243,8 +246,8 @@ cd ~/Desktop/code/spiderman2-mac-compat
 Then choose **one** command:
 
 ```bash
-make flat       # Normal game on the Mac display
 make highball   # Normal game using the Highball environment
+make flat       # Normal game using CrossOver
 make vr         # VR using the last saved render setting
 make mono       # VR without stereo depth; responsiveness experiment
 make stereo     # VR with the previous 1/3-rate stereo setting
