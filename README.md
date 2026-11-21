@@ -18,6 +18,32 @@ The launchers are ready for the existing installation on this Mac. A fresh
 Mac still needs manual compatibility work for VR; this repository is not an
 automatic VR installer. See Step 5 before buying anything specifically for VR.
 
+## Flat-screen play with Highball
+
+Highball can launch the Epic copy already installed by Heroic. On the M5 Pro
+test Mac, Highball 0.10.26 with the Sikarugir Wine 10 r28 engine launched the
+game. At High settings, play stuttered and the Mac froze while storage was
+nearly full and swap was exhausted. Performance at lower settings is unverified.
+
+1. Install [Highball](https://gethighball.com/docs/install/) and finish its
+   first-run setup. Use a Wine engine that runs through Rosetta.
+2. In the Highball environment, review Apple's D3DMetal license, select
+   D3DMetal, enable **Advertise AVX to games**, and set synchronization to
+   **None**.
+3. In that environment, run `PsPcSdkRuntimeManager.msi` and then
+   `PsPcSdkRuntimeInstaller.msi` from the existing game folder.
+4. With Heroic already signed in to Epic, set `flat_game`, `legendary`, and
+   `legendary_config` in `local.json`. If you use custom Highball paths, set
+   `highball_home` and `highball_bottle` there. The defaults are
+   `~/Library/Application Support/Highball` and `Games`.
+5. Run `./play highball --check`, then `make highball`. Dismiss the graphics
+   driver warning if it appears.
+
+If the game stutters, start with Windowed mode at 1600×900, the Low preset,
+ray tracing and frame generation off, and FSR with dynamic resolution
+targeting 30 FPS. Check macOS memory pressure and free storage as well.
+[Nixxes performance guide](https://support.nixxes.com/hc/en-us/articles/49284471919635-Marvel-s-Spider-Man-2-PC-Performance-Tuning)
+
 ## What you need
 
 - An Apple Silicon Mac. Our test machine is a Mac mini M5 Pro with 24 GB RAM;
@@ -218,12 +244,14 @@ Then choose **one** command:
 
 ```bash
 make flat       # Normal game on the Mac display
+make highball   # Normal game using the Highball environment
 make vr         # VR using the last saved render setting
 make mono       # VR without stereo depth; responsiveness experiment
 make stereo     # VR with the previous 1/3-rate stereo setting
 ```
 
-No Make? Use `./play flat`, `./play vr`, `./play mono` or `./play stereo` instead.
+No Make? Use `./play flat`, `./play highball`, `./play vr`, `./play mono` or
+`./play stereo` instead.
 For double-click launch, use `flat.command`, `vr.command` or `mono.command` in
 Finder. Run make or ./play for help.
 
